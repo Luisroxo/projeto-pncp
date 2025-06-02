@@ -1,3 +1,6 @@
+reescreva já com as aterações 
+
+
 """
 Serviço de conexão e operações com Elasticsearch.
 Este módulo implementa a conexão e operações básicas com o Elasticsearch.
