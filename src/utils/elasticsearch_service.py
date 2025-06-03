@@ -1,10 +1,5 @@
-reescreva já com as aterações 
-
-
-"""
-Serviço de conexão e operações com Elasticsearch.
-Este módulo implementa a conexão e operações básicas com o Elasticsearch.
-"""
+"""Serviço de conexão e operações com Elasticsearch.
+Este módulo implementa a conexão e operações básicas com o Elasticsearch."""
 
 import logging
 import json
@@ -12,6 +7,8 @@ from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, ConnectionError
+import os
+from dotenv import load_dotenv
 
 # Configuração de logging
 logging.basicConfig(
@@ -31,20 +28,27 @@ class ElasticsearchService:
             config: Dicionário com configurações do serviço.
                    Valores padrão serão usados se não fornecidos.
         """
+        # Carrega variáveis do .env
+        load_dotenv()
         self.config = config or {}
-        self.hosts = self.config.get('hosts', ['http://localhost:9200'])
-        self.index_name = self.config.get('index_name', 'licitacoes')
+        self.hosts = self.config.get('hosts') or [os.getenv('ELASTICSEARCH_HOST', 'http://localhost:9200')]
+        self.index_name = self.config.get('index_name') or os.getenv('ELASTICSEARCH_INDEX', 'licitacoes')
+        self.username = self.config.get('username') or os.getenv('ELASTICSEARCH_USERNAME')
+        self.password = self.config.get('password') or os.getenv('ELASTICSEARCH_PASSWORD')
         self.client = None
         self.connect()
         
     def connect(self) -> None:
         """Estabelece conexão com o Elasticsearch."""
         try:
-            self.client = Elasticsearch(
-                hosts=self.hosts,
-                retry_on_timeout=True,
-                max_retries=3
-            )
+            es_kwargs = {
+                'hosts': self.hosts,
+                'retry_on_timeout': True,
+                'max_retries': 3
+            }
+            if self.username and self.password:
+                es_kwargs['basic_auth'] = (self.username, self.password)
+            self.client = Elasticsearch(**es_kwargs)
             logger.info(f"Conectado ao Elasticsearch: {self.hosts}")
         except Exception as e:
             logger.error(f"Erro ao conectar ao Elasticsearch: {str(e)}")
