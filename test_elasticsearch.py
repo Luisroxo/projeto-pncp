@@ -33,7 +33,11 @@ def test_elasticsearch_connection():
     health = es_service.health_check()
     
     logger.info(f"Status do Elasticsearch: {health.get('status', 'desconhecido')}")
-    logger.info(f"Detalhes: {json.dumps(health, indent=2)}")
+    # Corrige serialização do ObjectApiResponse
+    if hasattr(health, 'body'):
+        logger.info(f"Detalhes: {json.dumps(health.body, indent=2)}")
+    else:
+        logger.info(f"Detalhes: {json.dumps(health, indent=2)}")
     
     return health.get('status') in ['green', 'yellow']
 

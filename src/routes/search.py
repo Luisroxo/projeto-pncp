@@ -7,6 +7,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+import json
 
 from src.utils.elasticsearch_service import get_elasticsearch_service
 from src.models.licitacao import Licitacao, db
@@ -356,25 +357,27 @@ def health_check():
     try:
         # Verifica a saúde do Elasticsearch
         es_health = es_service.health_check()
-        
+        # Corrige serialização do ObjectApiResponse
+        if hasattr(es_health, 'body'):
+            es_health_json = es_health.body
+        else:
+            es_health_json = es_health
         # Verifica a conexão com o banco de dados
         db_health = True
         try:
             db.session.execute("SELECT 1")
         except:
             db_health = False
-        
         return jsonify({
             'success': True,
             'data': {
-                'elasticsearch': es_health,
+                'elasticsearch': es_health_json,
                 'database': {
                     'status': 'ok' if db_health else 'error'
                 },
                 'timestamp': datetime.now().isoformat()
             }
         })
-        
     except Exception as e:
         logger.error(f"Erro no health check: {str(e)}")
         return jsonify({
