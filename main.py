@@ -39,27 +39,34 @@ def sync_licitacoes_api():
     data_inicial = data.get('dataInicial')
     data_final = data.get('dataFinal')
     codigo_modalidade = data.get('codigoModalidadeContratacao')
-    pagina = data.get('pagina', 1)
+    pagina = int(data.get('pagina', 1))
+    tamanho_pagina = int(data.get('tamanhoPagina', 10))
 
-    # Validação básica
     if not (data_inicial and data_final and codigo_modalidade):
         return jsonify({
             'error': 'Parâmetros obrigatórios: dataInicial, dataFinal, codigoModalidadeContratacao'
         }), 400
 
-    # Monta parâmetros para o serviço
-    params = {
-        'dataInicial': data_inicial,
-        'dataFinal': data_final,
-        'codigoModalidadeContratacao': codigo_modalidade,
-        'pagina': pagina
-    }
-
-    sync_service = PNCPSyncService()
-    licitacoes = sync_service.client.fetch_licitacoes(params)
+    es_service = get_elasticsearch_service()
+    indice = os.getenv('ELASTICSEARCH_INDEX', 'licitacoes')
+    from_ = (pagina - 1) * tamanho_pagina
+    try:
+        res = es_service.client.search(
+            index=indice,
+            body={
+                "query": {"match_all": {}},
+                "from": from_,
+                "size": tamanho_pagina
+            }
+        )
+        total = res['hits']['total']['value'] if 'hits' in res and 'total' in res['hits'] else 0
+        amostra = [doc['_source'] for doc in res['hits']['hits']]
+    except Exception as e:
+        total = 0
+        amostra = [f"Erro ao buscar amostra: {str(e)}"]
     return jsonify({
-        'quantidade': len(licitacoes),
-        'amostra': licitacoes[:5]  # Retorna até 5 licitações para visualização
+        'quantidade': total,
+        'amostra': amostra
     })
 
 @app.route('/sync-ui')
@@ -77,7 +84,8 @@ if __name__ == '__main__':
         data_final = sys.argv[3] if len(sys.argv) > 3 else None
         sync = PNCPSyncService()
         print(f"Reindexando licitações de {data_inicial} até {data_final}...")
-        sync.sync_licitacoes(data_inicial=data_inicial, data_final=data_final)
+        with app.app_context():
+            sync.sync_licitacoes(data_inicial=data_inicial, data_final=data_final)
         print("Reindexação concluída.")
     else:
         app.run(debug=True, host='0.0.0.0', port=5001)

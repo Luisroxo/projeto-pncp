@@ -31,6 +31,9 @@
             <label for="pagina">Página:</label>
             <input type="number" id="pagina" name="pagina" value="1" min="1">
 
+            <label for="tamanhoPagina">Itens por página:</label>
+            <input type="number" id="tamanhoPagina" name="tamanhoPagina" value="10" min="1" max="100">
+
             <button type="submit">Sincronizar</button>
         </form>
         <div id="result" class="result" style="display:none;"></div>
@@ -45,7 +48,8 @@
                 dataInicial: document.getElementById('dataInicial').value,
                 dataFinal: document.getElementById('dataFinal').value,
                 codigoModalidadeContratacao: parseInt(document.getElementById('codigoModalidadeContratacao').value),
-                pagina: parseInt(document.getElementById('pagina').value)
+                pagina: parseInt(document.getElementById('pagina').value),
+                tamanhoPagina: parseInt(document.getElementById('tamanhoPagina').value)
             };
             try {
                 const resp = await fetch('/sync', {

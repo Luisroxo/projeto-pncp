@@ -79,21 +79,11 @@ class PNCPSyncService:
     
     def sync_licitacoes(self, data_inicial=None, data_final=None, codigo_modalidade=6, pagina=1) -> int:
         """
-        Sincroniza licitações do PNCP com o banco de dados local.
-        
-        Args:
-            data_inicial: Data inicial no formato YYYYMMDD (opcional, default hoje)
-            data_final: Data final no formato YYYYMMDD (opcional, default hoje)
-            codigo_modalidade: Código da modalidade de contratação (default 6)
-            pagina: Número da página (default 1)
-        
-        Returns:
-            Número de licitações sincronizadas.
+        Sincroniza licitações do PNCP com o banco de dados local, buscando todas as páginas.
         """
         try:
             params = {}
             hoje = datetime.now()
-            # Ajuste: usa as datas passadas como argumento, se fornecidas
             if data_inicial:
                 if isinstance(data_inicial, str) and len(data_inicial) == 8:
                     params['dataInicial'] = data_inicial
@@ -116,58 +106,57 @@ class PNCPSyncService:
                 params['dataFinal'] = hoje.strftime('%Y%m%d')
 
             params['codigoModalidadeContratacao'] = self.config.get('codigo_modalidade', codigo_modalidade)
-            params['pagina'] = pagina
 
-            self.client.session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-            })
-
-            logger.info(f"Iniciando sincronização de licitações com params: {params}")
-            licitacoes = self.client.fetch_licitacoes(params)
-
-            if not licitacoes:
-                logger.info("Nenhuma licitação encontrada para sincronização")
-                self.update_last_sync_timestamp()
-                return 0
-            
-            # Processa cada licitação
-            count = 0
-            for licitacao_data in licitacoes:
-                try:
-                    # Verifica se a licitação já existe no banco
-                    sequencial = licitacao_data.get('sequencial')
-                    ano = licitacao_data.get('ano')
-                    
-                    if not sequencial or not ano:
-                        logger.warning(f"Licitação sem sequencial ou ano: {licitacao_data.get('id', 'N/A')}")
-                        continue
-                    
-                    # Gera um ID único para a licitação
-                    licitacao_id = f"{sequencial}_{ano}"
-                    
-                    # Busca no banco de dados
-                    existing = Licitacao.query.filter_by(id_externo=licitacao_id).first()
-                    
-                    if existing:
-                        # Atualiza licitação existente
-                        self._update_licitacao(existing, licitacao_data)
-                        logger.debug(f"Licitação atualizada: {licitacao_id}")
-                    else:
-                        # Cria nova licitação
-                        self._create_licitacao(licitacao_id, licitacao_data)
-                        logger.debug(f"Nova licitação criada: {licitacao_id}")
-                    
-                    count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Erro ao processar licitação {licitacao_data.get('id', 'N/A')}: {str(e)}")
-            
-            # Atualiza o timestamp da última sincronização
+            total_count = 0
+            pagina_atual = 1
+            total_paginas = None
+            while True:
+                params['pagina'] = pagina_atual
+                self.client.session.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+                })
+                logger.info(f"Sincronizando página {pagina_atual} com params: {params}")
+                # Chama a API e pega o JSON completo
+                result = self.client._make_request('v1/contratacoes/publicacao', params)
+                licitacoes = result.get('data', [])
+                if total_paginas is None:
+                    total_paginas = result.get('totalPaginas', 1)
+                    logger.info(f"Total de páginas a processar: {total_paginas}")
+                logger.info(f"Página {pagina_atual}: {len(licitacoes)} licitações retornadas.")
+                if not licitacoes:
+                    logger.info(f"Nenhuma licitação encontrada na página {pagina_atual}.")
+                    break
+                count = 0
+                for licitacao_data in licitacoes:
+                    try:
+                        licitacao_id = None
+                        numero_controle = licitacao_data.get('numeroControlePNCP')
+                        if numero_controle:
+                            licitacao_id = str(numero_controle)
+                        elif licitacao_data.get('id'):
+                            licitacao_id = str(licitacao_data['id'])
+                        else:
+                            logger.warning(f"Licitação sem identificador único: {licitacao_data}")
+                            continue
+                        existing = Licitacao.query.filter_by(id_externo=licitacao_id).first()
+                        if existing:
+                            self._update_licitacao(existing, licitacao_data)
+                            logger.debug(f"Licitação atualizada: {licitacao_id}")
+                        else:
+                            self._create_licitacao(licitacao_id, licitacao_data)
+                            logger.debug(f"Nova licitação criada: {licitacao_id}")
+                        count += 1
+                    except Exception as e:
+                        logger.error(f"Erro ao processar licitação {licitacao_data.get('id', 'N/A')}: {str(e)}")
+                total_count += count
+                logger.info(f"Página {pagina_atual} processada. {count} licitações indexadas.")
+                if pagina_atual >= total_paginas:
+                    logger.info(f"Última página alcançada ({pagina_atual}/{total_paginas}). Encerrando.")
+                    break
+                pagina_atual += 1
             self.update_last_sync_timestamp()
-            
-            logger.info(f"Sincronização concluída. {count} licitações processadas.")
-            return count
-            
+            logger.info(f"Sincronização concluída. {total_count} licitações processadas.")
+            return total_count
         except Exception as e:
             logger.error(f"Erro durante sincronização de licitações: {str(e)}")
             return 0
@@ -190,11 +179,22 @@ class PNCPSyncService:
             
             # Converte strings de data para objetos datetime
             data_publicacao = None
-            if 'dataPublicacao' in licitacao_data:
+            # Ajusta para buscar datas do PNCP
+            if 'dataPublicacaoPncp' in licitacao_data:
+                try:
+                    data_publicacao = datetime.fromisoformat(licitacao_data['dataPublicacaoPncp'].replace('Z', '+00:00'))
+                except (ValueError, TypeError):
+                    logger.warning(f"Formato de data inválido: {licitacao_data.get('dataPublicacaoPncp')}")
+            elif 'dataPublicacao' in licitacao_data:
                 try:
                     data_publicacao = datetime.fromisoformat(licitacao_data['dataPublicacao'].replace('Z', '+00:00'))
                 except (ValueError, TypeError):
                     logger.warning(f"Formato de data inválido: {licitacao_data.get('dataPublicacao')}")
+            elif 'dataInclusao' in licitacao_data:
+                try:
+                    data_publicacao = datetime.fromisoformat(licitacao_data['dataInclusao'].replace('Z', '+00:00'))
+                except (ValueError, TypeError):
+                    logger.warning(f"Formato de data inválido: {licitacao_data.get('dataInclusao')}")
             
             data_abertura = None
             if 'dataAbertura' in licitacao_data:
@@ -256,12 +256,25 @@ class PNCPSyncService:
             licitacao.situacao = licitacao_data.get('situacao', licitacao.situacao)
             
             # Atualiza datas se fornecidas
-            if 'dataPublicacao' in licitacao_data:
+            # Corrige: tenta na ordem dataPublicacaoPncp, dataPublicacao, dataInclusao
+            data_publicacao = licitacao.data_publicacao
+            if 'dataPublicacaoPncp' in licitacao_data:
                 try:
-                    licitacao.data_publicacao = datetime.fromisoformat(licitacao_data['dataPublicacao'].replace('Z', '+00:00'))
+                    data_publicacao = datetime.fromisoformat(licitacao_data['dataPublicacaoPncp'].replace('Z', '+00:00'))
+                except (ValueError, TypeError):
+                    logger.warning(f"Formato de data inválido: {licitacao_data.get('dataPublicacaoPncp')}")
+            elif 'dataPublicacao' in licitacao_data:
+                try:
+                    data_publicacao = datetime.fromisoformat(licitacao_data['dataPublicacao'].replace('Z', '+00:00'))
                 except (ValueError, TypeError):
                     logger.warning(f"Formato de data inválido: {licitacao_data.get('dataPublicacao')}")
-            
+            elif 'dataInclusao' in licitacao_data:
+                try:
+                    data_publicacao = datetime.fromisoformat(licitacao_data['dataInclusao'].replace('Z', '+00:00'))
+                except (ValueError, TypeError):
+                    logger.warning(f"Formato de data inválido: {licitacao_data.get('dataInclusao')}")
+            licitacao.data_publicacao = data_publicacao
+
             if 'dataAbertura' in licitacao_data:
                 try:
                     licitacao.data_abertura = datetime.fromisoformat(licitacao_data['dataAbertura'].replace('Z', '+00:00'))
@@ -297,7 +310,15 @@ class PNCPSyncService:
         try:
             # Converte o objeto Licitacao para um dicionário
             licitacao_dict = licitacao.to_dict()
-            
+
+            # Inclui o JSON original da API PNCP no campo 'dados_completos' (como dict)
+            if hasattr(licitacao, 'dados_completos') and licitacao.dados_completos:
+                try:
+                    import json
+                    licitacao_dict['dados_completos'] = json.loads(licitacao.dados_completos)
+                except Exception:
+                    licitacao_dict['dados_completos'] = licitacao.dados_completos  # fallback para string
+
             # Indexa no Elasticsearch
             success = self.es_service.index_document(licitacao.id, licitacao_dict)
             
