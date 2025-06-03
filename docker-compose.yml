@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.0.1
@@ -15,6 +16,19 @@ services:
       - 9300:9300
     volumes:
       - esdata:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.0.1
+    container_name: kibana
+    environment:
+      - SERVER_NAME=kibana
+      - ELASTICSEARCH_HOSTS=${ELASTICSEARCH_HOST}
+      # Autenticação via service token:
+      - ELASTICSEARCH_SERVICE_TOKEN=${ELASTICSEARCH_SERVICE_TOKEN}
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
 
 volumes:
   esdata:

@@ -49,9 +49,15 @@ def search_licitacoes():
         termo = request.args.get('q', '')
         page = int(request.args.get('page', 1))
         size = int(request.args.get('size', 10))
-        
-        # Calcula o índice inicial para paginação
         from_index = (page - 1) * size
+
+        # Novo: permite busca específica em objetoCompra
+        search_in_objeto_compra = request.args.get('objeto_compra', None)
+        if search_in_objeto_compra:
+            fields = ["objetoCompra^5"]
+            termo = search_in_objeto_compra
+        else:
+            fields = None  # padrão: busca em vários campos
         
         # Constrói filtros
         filters = {}
@@ -89,6 +95,7 @@ def search_licitacoes():
         # Executa a busca
         results = es_service.search_text(
             text=termo,
+            fields=fields,
             filters=filters,
             size=size,
             from_=from_index

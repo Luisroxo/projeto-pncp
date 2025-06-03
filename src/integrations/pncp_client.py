@@ -108,23 +108,28 @@ class PNCPClient:
         
         Args:
             params: Parâmetros de busca para filtrar licitações.
-                   Exemplos: dataPublicacao, modalidade, situacao, etc.
+                   Exemplos: dataInicial, dataFinal, codigoModalidadeContratacao, pagina.
                    
         Returns:
             Lista de licitações encontradas.
         """
         try:
-            result = self._make_request('contratacoes/publicacao', params)
-            
+            # Novo endpoint v1
+            endpoint = 'v1/contratacoes/publicacao'
+            result = self._make_request(endpoint, params)
+
             # Verifica se a resposta contém a estrutura esperada
             if 'content' in result:
                 licitacoes = result.get('content', [])
-                logger.info(f"Encontradas {len(licitacoes)} licitações")
+                logger.info(f"Encontradas {len(licitacoes)} licitações (campo 'content')")
+                return licitacoes
+            elif 'data' in result:
+                licitacoes = result.get('data', [])
+                logger.info(f"Encontradas {len(licitacoes)} licitações (campo 'data')")
                 return licitacoes
             else:
-                logger.warning(f"Resposta não contém o campo 'content': {result.keys()}")
+                logger.warning(f"Resposta não contém o campo 'content' nem 'data': {result.keys()}")
                 return []
-                
         except Exception as e:
             logger.error(f"Erro ao buscar licitações: {str(e)}")
             return []

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Sincronizar Licitações PNCP</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
+        .container { background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; margin: auto; box-shadow: 0 2px 8px #0001; }
+        h2 { text-align: center; }
+        label { display: block; margin-top: 15px; }
+        input, select { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        button { margin-top: 20px; width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 30px; background: #e9ecef; padding: 15px; border-radius: 6px; }
+        .error { color: #b30000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Sincronizar Licitações PNCP</h2>
+        <form id="syncForm">
+            <label for="dataInicial">Data Inicial (YYYYMMDD):</label>
+            <input type="text" id="dataInicial" name="dataInicial" required placeholder="Ex: 20250501">
+
+            <label for="dataFinal">Data Final (YYYYMMDD):</label>
+            <input type="text" id="dataFinal" name="dataFinal" required placeholder="Ex: 20250601">
+
+            <label for="codigoModalidadeContratacao">Código Modalidade Contratação:</label>
+            <input type="number" id="codigoModalidadeContratacao" name="codigoModalidadeContratacao" required placeholder="Ex: 6">
+
+            <label for="pagina">Página:</label>
+            <input type="number" id="pagina" name="pagina" value="1" min="1">
+
+            <button type="submit">Sincronizar</button>
+        </form>
+        <div id="result" class="result" style="display:none;"></div>
+    </div>
+    <script>
+        document.getElementById('syncForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'none';
+            resultDiv.innerHTML = '';
+            const data = {
+                dataInicial: document.getElementById('dataInicial').value,
+                dataFinal: document.getElementById('dataFinal').value,
+                codigoModalidadeContratacao: parseInt(document.getElementById('codigoModalidadeContratacao').value),
+                pagina: parseInt(document.getElementById('pagina').value)
+            };
+            try {
+                const resp = await fetch('/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const json = await resp.json();
+                resultDiv.style.display = 'block';
+                if (resp.ok) {
+                    resultDiv.innerHTML = `<b>Quantidade de licitações:</b> ${json.quantidade}<br><br><b>Amostra:</b><pre>${JSON.stringify(json.amostra, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<span class='error'>Erro: ${json.error || 'Falha na requisição.'}</span>`;
+                }
+            } catch (err) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<span class='error'>Erro: ${err.message}</span>`;
+            }
+        };
+    </script>
+</body>
+</html>

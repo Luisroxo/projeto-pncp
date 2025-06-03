@@ -108,7 +108,14 @@ class ElasticsearchService:
                         },
                         "uf": {"type": "keyword"},
                         "data_criacao": {"type": "date"},
-                        "data_atualizacao": {"type": "date"}
+                        "data_atualizacao": {"type": "date"},
+                        "objetoCompra": {
+                            "type": "text",
+                            "analyzer": "portuguese",
+                            "fields": {
+                                "keyword": {"type": "keyword", "ignore_above": 256}
+                            }
+                        }
                     }
                 },
                 "settings": {

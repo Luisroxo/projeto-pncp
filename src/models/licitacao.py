@@ -67,7 +67,7 @@ class Licitacao(db.Model):
         Returns:
             Dicionário com os dados da licitação.
         """
-        return {
+        d = {
             'id': self.id,
             'id_externo': self.id_externo,
             'fonte': self.fonte,
@@ -87,6 +87,24 @@ class Licitacao(db.Model):
             'data_criacao': self.data_criacao.isoformat(),
             'data_atualizacao': self.data_atualizacao.isoformat()
         }
+        # Adiciona objetoCompra diretamente ao dicionário indexado, se existir em dados_completos
+        objeto_compra = None
+        if hasattr(self, 'dados_completos') and self.dados_completos:
+            try:
+                import json
+                dados = json.loads(self.dados_completos)
+                objeto_compra = dados.get('objetoCompra')
+            except Exception:
+                pass
+        # Se não existir no JSON, usa o campo objeto
+        if not objeto_compra:
+            objeto_compra = self.objeto
+        if objeto_compra:
+            d['objetoCompra'] = objeto_compra
+        # Garante que objetoCompra também seja indexado se existir como atributo (caso futuro)
+        if hasattr(self, 'objetoCompra') and self.objetoCompra:
+            d['objetoCompra'] = self.objetoCompra
+        return d
     
     @classmethod
     def create_indices(cls):

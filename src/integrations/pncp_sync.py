@@ -77,31 +77,54 @@ class PNCPSyncService:
         except Exception as e:
             logger.error(f"Erro ao atualizar timestamp de sincronização: {str(e)}")
     
-    def sync_licitacoes(self) -> int:
+    def sync_licitacoes(self, data_inicial=None, data_final=None, codigo_modalidade=6, pagina=1) -> int:
         """
         Sincroniza licitações do PNCP com o banco de dados local.
+        
+        Args:
+            data_inicial: Data inicial no formato YYYYMMDD (opcional, default hoje)
+            data_final: Data final no formato YYYYMMDD (opcional, default hoje)
+            codigo_modalidade: Código da modalidade de contratação (default 6)
+            pagina: Número da página (default 1)
         
         Returns:
             Número de licitações sincronizadas.
         """
         try:
-            # Obtém o timestamp da última sincronização
-            last_sync = self.get_last_sync_timestamp()
-            
-            # Define parâmetros de busca
             params = {}
-            if last_sync:
-                # Busca licitações atualizadas desde a última sincronização
-                params['dataAtualizacaoInicio'] = last_sync
+            hoje = datetime.now()
+            # Ajuste: usa as datas passadas como argumento, se fornecidas
+            if data_inicial:
+                if isinstance(data_inicial, str) and len(data_inicial) == 8:
+                    params['dataInicial'] = data_inicial
+                else:
+                    params['dataInicial'] = datetime.strptime(data_inicial, '%Y-%m-%d').strftime('%Y%m%d')
             else:
-                # Se for a primeira sincronização, limita aos últimos 30 dias
-                data_inicio = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-                params['dataPublicacaoInicio'] = data_inicio
-            
-            # Busca licitações no PNCP
+                last_sync = self.get_last_sync_timestamp()
+                if last_sync:
+                    data_inicial_dt = datetime.strptime(last_sync[:10], '%Y-%m-%d')
+                else:
+                    data_inicial_dt = hoje - timedelta(days=30)
+                params['dataInicial'] = data_inicial_dt.strftime('%Y%m%d')
+
+            if data_final:
+                if isinstance(data_final, str) and len(data_final) == 8:
+                    params['dataFinal'] = data_final
+                else:
+                    params['dataFinal'] = datetime.strptime(data_final, '%Y-%m-%d').strftime('%Y%m%d')
+            else:
+                params['dataFinal'] = hoje.strftime('%Y%m%d')
+
+            params['codigoModalidadeContratacao'] = self.config.get('codigo_modalidade', codigo_modalidade)
+            params['pagina'] = pagina
+
+            self.client.session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+            })
+
             logger.info(f"Iniciando sincronização de licitações com params: {params}")
             licitacoes = self.client.fetch_licitacoes(params)
-            
+
             if not licitacoes:
                 logger.info("Nenhuma licitação encontrada para sincronização")
                 self.update_last_sync_timestamp()

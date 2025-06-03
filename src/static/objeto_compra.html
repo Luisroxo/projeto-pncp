@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Buscar por Objeto Compra</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
+        .container { background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; margin: auto; box-shadow: 0 2px 8px #0001; }
+        h2 { text-align: center; }
+        label { display: block; margin-top: 15px; }
+        input, select { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        button { margin-top: 20px; width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 30px; background: #e9ecef; padding: 15px; border-radius: 6px; }
+        .error { color: #b30000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Buscar Licitações por Objeto Compra</h2>
+        <form id="objetoCompraForm">
+            <label for="objetoCompra">Termo do Objeto Compra:</label>
+            <input type="text" id="objetoCompra" name="objetoCompra" required placeholder="Ex: computadores, papel, etc.">
+            <label for="size">Quantidade de resultados:</label>
+            <input type="number" id="size" name="size" value="10" min="1" max="100">
+            <button type="submit">Buscar</button>
+        </form>
+        <div id="result" class="result" style="display:none;"></div>
+    </div>
+    <script>
+        document.getElementById('objetoCompraForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'none';
+            resultDiv.innerHTML = '';
+            const termo = document.getElementById('objetoCompra').value;
+            const size = document.getElementById('size').value;
+            try {
+                const resp = await fetch(`/api/search/licitacoes?objeto_compra=${encodeURIComponent(termo)}&size=${size}`);
+                const json = await resp.json();
+                resultDiv.style.display = 'block';
+                if (json.success) {
+                    resultDiv.innerHTML = `<b>Total encontrado:</b> ${json.data.total}<br><br><b>Resultados:</b><pre>${JSON.stringify(json.data.items, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<span class='error'>Erro: ${json.error || 'Falha na requisição.'}</span>`;
+                }
+            } catch (err) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<span class='error'>Erro: ${err.message}</span>`;
+            }
+        };
+    </script>
+</body>
+</html>
