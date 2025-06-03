@@ -44,7 +44,8 @@ class ElasticsearchService:
             es_kwargs = {
                 'hosts': self.hosts,
                 'retry_on_timeout': True,
-                'max_retries': 3
+                'max_retries': 3,
+                'verify_certs': False  # Permite certificados autoassinados em ambiente de desenvolvimento
             }
             if self.username and self.password:
                 es_kwargs['basic_auth'] = (self.username, self.password)
