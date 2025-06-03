@@ -6,7 +6,10 @@ services:
     environment:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - ELASTIC_USERNAME=${ELASTICSEARCH_USERNAME}
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
     ports:
       - 9200:9200
       - 9300:9300
@@ -15,4 +18,3 @@ services:
 
 volumes:
   esdata:
-  

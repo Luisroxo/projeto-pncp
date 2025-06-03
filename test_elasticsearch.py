@@ -8,6 +8,8 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta
+from src.utils.elasticsearch_service import get_elasticsearch_service
+
 
 # Configurar o path para importar os módulos do projeto
 sys.path.append('/home/ubuntu/modulo-encontrar')
